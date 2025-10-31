@@ -2,6 +2,8 @@
 
 Este repositorio contiene la solución a la prueba técnica para un puesto de Backend. El proyecto implementa un sistema de microservicios para gestionar clientes y órdenes, orquestado por una función Lambda.
 
+**LAS VARIABLES DE ENTORNO YA ESTAN CONFIGURADAS EN LOS ARCHIVOS .env**
+
 # Arquitectura
 
 El sistema está compuesto por tres servicios principales que se ejecutan de forma independiente:
@@ -229,6 +231,27 @@ Este es el endpoint principal de la prueba. Envía un `POST` al Lambda Orquestad
 
 Si envías la misma petición con la misma idempotency_key múltiples veces, el sistema procesará la orden solo una vez y devolverá una respuesta de conflicto porque ya se esta procesando la orden.
 
+# Prueba Opcional (AWS + ngrok)
+
+El reto también permite probar el Lambda desplegado en AWS mientras las APIs corren localmente.
+
+1. Exponer APIs locales: Con Docker corriendo, usar ngrok para exponer los puertos locales:
+
+```bash
+ngrok http 3001 # Obtener URL pública para Customers
+ngrok http 3002 # Obtener URL pública para Orders
+```
+
+2. Configurar Lambda: Actualizar lambda-orchestrator/.env con las URLs públicas de ngrok.
+
+3. Desplegar Lambda: Desde lambda-orchestrator/, ejecutar:
+
+```bash
+serverless deploy
+```
+
+4. Probar: Invocar el endpoint de AWS API Gateway que serverless proporcione usando Postman/Insomnia.
+
 # Documentación API (OpenAPI)
 
 La documentación detallada de cada API (con todos los endpoints, parámetros y esquemas) se encuentra en los archivos openapi.yaml dentro de la carpeta de cada servicio.
@@ -238,3 +261,5 @@ La documentación detallada de cada API (con todos los endpoints, parámetros y 
 - ./orders-api/openapi.yaml
 
 (Puedes usar herramientas como **Swagger Editor** o **Stoplight Elements** para visualizar estos archivos).
+
+## Psdt: Se que es una mala práctica subir variables de entorno (archivos `.env`) y más en proyectos como estos, pero como es una prueba se que no hay problema :).

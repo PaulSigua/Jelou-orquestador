@@ -116,10 +116,11 @@ Una vez levantado todo, los servicios estarán disponibles en:
 
 Puedes usar Postman, Insomnia o cURL para probar los servicios.
 
-Ejemplos cURL (APIs)
+Se recomienda probar primero los endpoints individuales de cada API para verificar su funcionamiento antes de probar el flujo completo del orquestador.
 
-``` bash
-# --- Customers API ---
+### 1. Pruebas Individuales por API (Debugging)
+
+#### Customers API (http://localhost:3001)
 
 # Crear un cliente
 curl -X POST http://localhost:3001/customers \
@@ -133,21 +134,61 @@ curl -X POST http://localhost:3001/customers \
 # Listar clientes
 curl http://localhost:3001/customers
 
-# Orders API
+---
+
+#### Orders API (http://localhost:3002)
 
 # Listar productos (cargados desde el seed.sql)
 curl http://localhost:3002/products
+
+**Crear una orden (Prueba de Transacción)**
+
+**NOTA**: Esto descontará el stock del producto.
+```json
+curl -X POST http://localhost:3002/orders \
+-H "Content-Type: application/json" \
+-d '{
+    "customer_id": 1,
+    "items": [ { "product_id": 2, "qty": 10 } ]
+}'
 ```
 
-# Invocación del Flujo Completo (Lambda)
+Espera: 201 Created. Anota el "id" de la orden (ej. 1)
 
-Este es el endpoint principal de la prueba. Envía un POST al Lambda Orquestador:
+### Confirmar la orden (Prueba de Idempotencia)
 
-**Endpoint**: POST http://localhost:3003/dev/orchestrator/create-and-confirm-order (Nota: /dev es el "stage" por defecto de serverless-offline)
+Reemplaza :id por el ID de la orden que creaste.
+
+```json
+curl -X POST http://localhost:3002/orders/1/confirm \
+-H "X-Idempotency-Key: mi-clave-de-prueba-123"
+```
+
+Espera: 200 OK, orden en estado CONFIRMED.
+
+(Si ejecutas el comando anterior de nuevo con la misma key,
+deberías recibir un 200 OK de inmediato, sin re-procesar).
+
+### Cancelar la orden (Prueba de Restauración de Stock)
+
+Reemplaza :id por el ID de la orden.
+
+```json
+curl -X POST http://localhost:3002/orders/1/cancel
+# Espera: 200 OK, orden en estado CANCELED.
+# (El stock del producto 2 debería restaurarse).
+```
+---
+
+### 2. Invocación del Flujo Completo (Lambda)
+
+Este es el endpoint principal de la prueba. Envía un `POST` al Lambda Orquestador:
+
+**Endpoint**: `POST http://localhost:3003/dev/orchestrator/create-and-confirm-order`
+*(Nota: `/dev` es el "stage" por defecto de serverless-offline)*
 
 **Body (JSON):**
-
-```bash
+```json
 { 
     "customer_id": 1, 
     "items": [ 
@@ -158,20 +199,19 @@ Este es el endpoint principal de la prueba. Envía un POST al Lambda Orquestador
 }
 ```
 
-# Respuesta Exitosa (Ejemplo)
+**Respuesta Exitosa (Ejemplo)**
 
-```
+```json
 {
     "success": true,
     "correlationId": "req-abc",
     "data": {
         "customer": {
             "id": 1,
-            "name": "ACME Inc.",
-            ...
+            "name": "ACME Inc."
         },
         "order": {
-            "id": 1,
+            "id": 2,
             "status": "CONFIRMED",
             "total_cents": 135000,
             "items": [ ... ]
@@ -180,7 +220,7 @@ Este es el endpoint principal de la prueba. Envía un POST al Lambda Orquestador
 }
 ```
 
-Si envías la misma petición con la misma idempotency_key múltiples veces, el sistema procesará la orden solo una vez y devolverá que hay idempotencia.
+Si envías la misma petición con la misma idempotency_key múltiples veces, el sistema procesará la orden solo una vez y devolverá una respuesta de conflicto porque ya se esta procesando la orden.
 
 # Documentación API (OpenAPI)
 

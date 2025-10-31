@@ -122,7 +122,9 @@ Se recomienda probar primero los endpoints individuales de cada API para verific
 
 #### Customers API (http://localhost:3001)
 
-# Crear un cliente
+**Crear un cliente**
+
+```json
 curl -X POST http://localhost:3001/customers \
 -H "Content-Type: application/json" \
 -d '{
@@ -130,16 +132,21 @@ curl -X POST http://localhost:3001/customers \
     "email": "prueba@test.com",
     "phone": "555-8888"
 }'
+```
 
-# Listar clientes
+**Listar clientes**
+```json
 curl http://localhost:3001/customers
-
+```
 ---
 
 #### Orders API (http://localhost:3002)
 
-# Listar productos (cargados desde el seed.sql)
+**Listar productos (cargados desde el seed.sql)**
+
+```json
 curl http://localhost:3002/products
+```
 
 **Crear una orden (Prueba de Transacción)**
 

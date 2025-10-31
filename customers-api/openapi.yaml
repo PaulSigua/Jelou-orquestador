@@ -1,0 +1,280 @@
+# Versión de la especificación OpenAPI
+openapi: 3.0.4
+
+# Información general sobre la API
+info:
+  title: Customers API
+  description: API para la gestión de clientes (Prueba Técnica)
+  version: 1.0.0
+
+# Servidores a los que se puede llamar (útil para la UI de Swagger)
+servers:
+  - url: http://localhost:3001
+    description: Servidor de desarrollo local
+
+# Definición de los "Tags" (categorías)
+tags:
+  - name: Customers
+    description: Operaciones sobre clientes
+  - name: Internal
+    description: Operaciones internas (servicio-a-servicio)
+  - name: Health
+    description: Verificación de estado del servicio
+
+# Definición de los componentes reutilizables (esquemas de datos)
+components:
+  schemas:
+    # Esquema de un Cliente
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Jelou
+        email:
+          type: string
+          example: ops@acme.com
+        phone:
+          type: string
+          example: "555-1234"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-31T05:19:46.000Z"
+
+    # Esquema para crear un cliente
+    NewCustomer:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          example: Jelou
+        email:
+          type: string
+          example: ops@acme.com
+        phone:
+          type: string
+          example: "555-1234"
+
+    # Esquema para actualizar un cliente
+    UpdateCustomer:
+      type: object
+      properties:
+        name:
+          type: string
+          example: ACME Corp
+        email:
+          type: string
+          example: new-ops@acme.com
+        phone:
+          type: string
+          example: "555-9999"
+      minProperties: 1
+
+    # Esquema de respuesta de error
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          example: Mensaje de error
+
+  # Definición de esquemas de seguridad (para el token de servicio)
+  securitySchemes:
+    ServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT # Aunque sea un token estático, se envía así
+
+# Definición de los "paths" (endpoints)
+paths:
+  # Health Check
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Comprueba el estado de la API y la conexión a BDD
+      responses:
+        '200':
+          description: Servicio operativo
+        '503':
+          description: Error de conexión a BDD
+
+  # Endpoints de Clientes
+  /customers:
+    post:
+      tags:
+        - Customers
+      summary: Crea un nuevo cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewCustomer'
+      responses:
+        '201':
+          description: Cliente creado exitosamente
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '400':
+          description: Datos de entrada inválidos
+        '409':
+          description: El email ya existe
+          
+    get:
+      tags:
+        - Customers
+      summary: Lista, busca y pagina clientes
+      parameters:
+        - name: search
+          in: query
+          description: Término de búsqueda (por nombre o email)
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: ID del último cliente visto (para paginación)
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: Cantidad de resultados (default 10)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Customer'
+                  nextCursor:
+                    type: integer
+                    example: 10
+                    nullable: true
+
+  /customers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID del cliente
+        schema:
+          type: integer
+    
+    get:
+      tags:
+        - Customers
+      summary: Obtiene el detalle de un cliente
+      responses:
+        '200':
+          description: Detalle del cliente
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '404':
+          description: Cliente no encontrado
+          
+    put:
+      tags:
+        - Customers
+      summary: Actualiza un cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomer'
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '400':
+          description: Datos inválidos
+        '404':
+          description: Cliente no encontrado
+          
+    delete:
+      tags:
+        - Customers
+      summary: Elimina (soft-delete) un cliente
+      responses:
+        '204':
+          description: Cliente eliminado exitosamente (Sin contenido)
+        '404':
+          description: Cliente no encontrado
+
+  # Endpoints Internos
+  /internal/customers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: ID del cliente
+        schema:
+          type: integer
+          
+    get:
+      tags:
+        - Internal
+      summary: Obtiene detalle de un cliente (para servicios internos)
+      security:
+        # Requiere el token de servicio
+        - ServiceToken: [] 
+      responses:
+        '200':
+          description: Detalle del cliente
+          content:
+            application/json:
+              schema:
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/Customer'
+        '401':
+          description: No autorizado (falta token)
+        '403':
+          description: Token inválido
+        '404':
+          description: Cliente no encontrado

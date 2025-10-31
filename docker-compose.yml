@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  db:
+    # Servicio para la base de datos
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: unless-stopped
+    ports:
+      - "3306:3306" # Expone el puerto 3306 al host
+    environment:
+      MYSQL_DATABASE: b2b_orders
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword # Contraseña de root
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+      # Volumen persistente para los datos de la BDD
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  # Customers API (Node.js)
+  customers-api:
+    container_name: customers_api
+    build:
+      context: ./customers-api # Directorio del Dockerfile
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001" # Puerto de la API
+    environment:
+      # Variables de entorno para la API
+      NODE_ENV: development
+      PORT: 3001
+      DB_HOST: db         # Se conecta al servicio 'db'
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: b2b_orders
+      JWT_SECRET: "TU_SECRET_JWT_AQUI"
+      INTERNAL_SERVICE_TOKEN: "UN_TOKEN_SECRETO_PARA_SERVICIOS"
+    networks:
+      - app-network
+    depends_on:
+      - db # No arranca hasta que la BDD esté lista
+
+  # Orders API (Node.js)
+  orders-api:
+    container_name: orders_api
+    build:
+      context: ./orders-api # Directorio del Dockerfile
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3002" # Puerto de la API
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DB_HOST: db         # Se conecta al servicio 'db'
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: b2b_orders
+      JWT_SECRET: "OTRO_SECRET_JWT_AQUI"
+      INTERNAL_SERVICE_TOKEN: "UN_TOKEN_SECRETO_PARA_SERVICIOS"
+      # URL para comunicarse con la otra API
+      CUSTOMERS_API_URL: "http://customers-api:3001"
+    networks:
+      - app-network
+    depends_on:
+      - db
+      - customers-api # No arranca hasta que la BDD y la API de clientes estén listas
+
+# Definición de Volúmenes y Redes
+volumes:
+  mysql_data: # Volumen nombrado para persistir datos
+
+networks:
+  app-network: # Red interna para que los contenedores se comuniquen
+    driver: bridge

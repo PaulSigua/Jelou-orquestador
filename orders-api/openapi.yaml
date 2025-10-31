@@ -1,0 +1,404 @@
+# Versión de la especificación OpenAPI
+openapi: 3.0.4
+
+# Información general sobre la API
+info:
+  title: Orders API
+  description: API para la gestión de productos y órdenes (Prueba Técnica)
+  version: 1.0.0
+
+# Servidores a los que se puede llamar
+servers:
+  - url: http://localhost:3002
+    description: Servidor de desarrollo local
+
+# Definición de los "Tags" (categorías)
+tags:
+  - name: Products
+    description: Operaciones sobre productos y stock
+  - name: Orders
+    description: Operaciones sobre órdenes de clientes
+  - name: Health
+    description: Verificación de estado del servicio
+
+# Definición de los componentes reutilizables (esquemas de datos)
+components:
+  schemas:
+    # Esquemas de Producto 
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        sku:
+          type: string
+          example: TEC-MEC-001
+        name:
+          type: string
+          example: Teclado Mecánico Pro
+        price_cents:
+          type: integer
+          example: 89900
+        stock:
+          type: integer
+          example: 50
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-31T04:28:57.000Z"
+          
+    NewProduct:
+      type: object
+      required:
+        - sku
+        - name
+        - price_cents
+      properties:
+        sku:
+          type: string
+          example: MON-24-003
+        name:
+          type: string
+          example: Monitor UltraWide 24"
+        price_cents:
+          type: integer
+          example: 199900
+        stock:
+          type: integer
+          example: 30
+          
+    UpdateProduct:
+      type: object
+      description: Campos para actualizar (precio/stock)
+      properties:
+        price_cents:
+          type: integer
+          example: 95000
+        stock:
+          type: integer
+          example: 45
+      minProperties: 1
+      
+    # Esquemas de Orden
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_id:
+          type: integer
+          example: 101
+        product_id:
+          type: integer
+          example: 2
+        qty:
+          type: integer
+          example: 3
+        unit_price_cents:
+          type: integer
+          example: 45000
+        subtotal_cents:
+          type: integer
+          example: 135000
+          
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        customer_id:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [CREATED, CONFIRMED, CANCELED]
+          example: CONFIRMED
+        total_cents:
+          type: integer
+          example: 135000
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-10-31T05:19:46.000Z"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+
+    NewOrderItem:
+      type: object
+      required:
+        - product_id
+        - qty
+      properties:
+        product_id:
+          type: integer
+          example: 2
+        qty:
+          type: integer
+          example: 3
+          
+    NewOrder:
+      type: object
+      required:
+        - customer_id
+        - items
+      properties:
+        customer_id:
+          type: integer
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewOrderItem'
+            
+    # Esquema de Error
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          example: Mensaje de error
+
+# Definición de los "paths" (endpoints)
+paths:
+  # Health Check
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Comprueba el estado de la API y la conexión a BDD
+      responses:
+        '200':
+          description: Servicio operativo
+        '503':
+          description: Error de conexión a BDD
+
+  # Endpoints de Productos 
+  /products:
+    post:
+      tags:
+        - Products
+      summary: Crea un nuevo producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewProduct'
+      responses:
+        '201':
+          description: Producto creado
+        '400':
+          description: Datos inválidos
+        '409':
+          description: SKU duplicado
+          
+    get:
+      tags:
+        - Products
+      summary: Lista, busca y pagina productos
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de productos
+
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    
+    get:
+      tags:
+        - Products
+      summary: Obtiene el detalle de un producto
+      responses:
+        '200':
+          description: Detalle del producto
+        '404':
+          description: Producto no encontrado
+          
+    patch:
+      tags:
+        - Products
+      summary: Actualiza precio y/o stock de un producto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProduct'
+      responses:
+        '200':
+          description: Producto actualizado
+        '400':
+          description: Datos inválidos
+        '404':
+          description: Producto no encontrado
+
+  # Endpoints de Órdenes 
+  /orders:
+    post:
+      tags:
+        - Orders
+      summary: Crea una nueva orden (transaccional)
+      description: Valida cliente, verifica stock, crea orden (CREATED) y descuenta stock.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+      responses:
+        '201':
+          description: Orden creada
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '404':
+          description: Cliente o Producto no encontrado
+        '409':
+          description: Stock insuficiente
+          
+    get:
+      tags:
+        - Orders
+      summary: Lista, filtra y pagina órdenes
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, CONFIRMED, CANCELED]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: cursor
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de órdenes
+
+  /orders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          
+    get:
+      tags:
+        - Orders
+      summary: Obtiene el detalle de una orden (incluye items)
+      responses:
+        '200':
+          description: Detalle de la orden
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '404':
+          description: Orden no encontrada
+
+  /orders/{id}/confirm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          
+    post:
+      tags:
+        - Orders
+      summary: Confirma una orden (Idempotente)
+      description: Cambia el estado a CONFIRMED. Debe ser idempotente.
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          description: Clave única para garantizar la idempotencia de la confirmación
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Orden confirmada (o ya estaba confirmada por la misma key)
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '400':
+          description: Falta el header X-Idempotency-Key
+        '404':
+          description: Orden no encontrada
+        '409':
+          description: Conflicto (estado no válido o clave de idempotencia en procesamiento)
+          
+  /orders/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          
+    post:
+      tags:
+        - Orders
+      summary: Cancela una orden (Transaccional)
+      description: Cambia estado a CANCELED y restaura stock según las reglas de negocio.
+      responses:
+        '200':
+          description: Orden cancelada (o ya estaba cancelada)
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+        '404':
+          description: Orden no encontrada
+        '409':
+          description: No se puede cancelar (ej. ventana de tiempo expirada)

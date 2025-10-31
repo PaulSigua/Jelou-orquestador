@@ -1,0 +1,35 @@
+service: lambda-orchestrator
+
+provider:
+  name: aws
+  runtime: nodejs22.x # Como se pide en la prueba 
+  stage: dev
+  region: us-east-1 
+  
+  # Cargar variables de entorno desde el archivo .env
+  environment:
+    CUSTOMERS_API_URL: ${./env:CUSTOMERS_API_URL}
+    ORDERS_API_URL: ${./env:ORDERS_API_URL}
+    INTERNAL_SERVICE_TOKEN: ${./env:INTERNAL_SERVICE_TOKEN}
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-offline  # Plugin para pruebas locales
+
+functions:
+  # Definición de nuestra única función
+  createAndConfirmOrder:
+    handler: src/handler.main # Apunta al archivo y función (module.exports.main)
+    description: Orquesta la creación y confirmación de un pedido
+    events:
+      # Define el trigger HTTP
+      - http:
+          path: /orchestrator/create-and-confirm-order # 
+          method: post
+          cors: true # Habilitar CORS para pruebas
+
+custom:
+  # Configuración del plugin serverless-offline
+  serverless-offline:
+    httpPort: 3003 # El puerto en el que correrá el API Gateway local
+    lambdaPort: 3004
